@@ -4,6 +4,8 @@ Created on Tue Dec 15 15:23:11 2020
 
 @author: alexa
 """
+#Creating data visualizations with the streamlit package in python
+
 #Packages
 import streamlit as st
 
