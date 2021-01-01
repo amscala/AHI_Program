@@ -1,0 +1,77 @@
+library(DBI) #for database connection
+library(dplyr) #for data maipulation 
+library(ggpubr) #for visuzliation 
+library(moments) #for assumption testing 
+library(car) #for assumption test / CAR package for non-balanced designs
+library(stringr) #for string manipulation 
+library(psych) #for descriptives 
+library(vcd) #for mosaic visuzliation 
+library(summarytools) #for advanced stats / descriptives 
+library(nortest) #equivalent of shapiro but for larger samples // Anderson-Darling // ad.test(data$variable)
+library(CGPfunctions) #for plotting 2 factor anova nice and clean
+library(pwr)
+
+con<-DBI::dbConnect(odbc::odbc(),
+                      Driver    = "MySQL", 
+                      Server    = "34.204.170.21",
+                      Database = "examples",
+                      UID       = "dba",
+                      PWD       = "ahi2020",
+                      Port      = "3306")
+
+df <- dbReadTable(con, "diabetes_alex")
+
+df_sub = df %>% select('num_medications', 'race', 'gender', 'age', 'medical_specialty')
+
+df_sub<-df_sub%>%rename('medcount'='num_medications','category'='medical_specialty','sex'='gender')
+
+df_sub <- replace(df_sub, df_sub == '?', NA)
+
+df_sub$medcount = as.numeric(df_sub$medcount)
+
+#Data cleaning for age, removing brackets and parentheses
+#Stringr package allows for replacement
+#Double backslash allows differentiation between the bracket as a string and a special symbol
+df_sub$age <- str_replace(df_sub$age, "\\[", "")
+df_sub$age <- str_replace(df_sub$age, "\\)", "")
+
+#Double checking data types, it will output the datatypes of the columns in df_sub
+#sapply allows for the same thing to be applied across all columns in our dataframe
+#apply is the command for all rows
+df_sub_types = sapply(df_sub, class)
+df_sub_types
+
+#Counts for each column as a dataframe
+race = as.data.frame(table(df_sub$race))
+sex = as.data.frame(table(df_sub$sex))
+age = as.data.frame(table(df_sub$age))
+category = as.data.frame(table(df_sub$category))
+
+general=c("Surgery-General","Orthopedics","InternalMedicine","Family/GeneralPractice","Emergency/Trauma")
+specialty=c("Cardiology","Nephrology","Orthopedics-Reconstructive","Radiologist")
+
+df_sub$category_coded = ifelse(df_sub$category %in% general, "General", 
+                               ifelse(df_sub$category %in% specialty, "Specialty", "Other"))
+
+young = c("0-10", "10-20")
+adult=c("20-30","30-40","40-50")
+senior = c("60-70", "70-80")
+
+df_sub$age_coded=ifelse(df_sub$age %in% young, "Young",
+                        ifelse(df_sub$age %in% adult, "Adult",
+                               ifelse(df_sub$age %in% senior, "Senior","Elderly")))
+
+white = c("Caucasian")
+df_sub$race_coded = ifelse(df_sub$race %in% white, "white", "not_white")
+
+res.aov2<-aov(medcount~age+race,data=df_sub)
+summary(res.aov2)
+#They are both statistically significant
+#There are main effects for both race and age in respect to the medcount
+
+res.aov3<-aov(medcount~category_coded*race,data=df_sub)
+summary(res.aov3)
+#This is statistically significant bc the p value is smol
+
+ggboxplot(df_sub,x="race",y="medcount",color="category_coded")
+Plot2WayANOVA(medcount ~ category_coded * race, df_sub, plottype = "line")
